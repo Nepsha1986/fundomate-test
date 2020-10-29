@@ -2,13 +2,14 @@
 <html>
 <head>
     <meta charset="UTF-8"/>
-    <title>Task#4</title>
+    <title>Top Artists App</title>
     <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
         body {
+            background: #f8f9fb;
             counter-reset: section;
         }
 
@@ -23,12 +24,14 @@
         }
 
         .artist {
+            background: #fff;
             padding: 15px;
             display: flex;
+            border-radius: 3px;
+            box-shadow: 0 3px 1px -2px rgba(0, 0, 0, .2), 0 2px 2px 0 rgba(0, 0, 0, .14), 0 1px 5px 0 rgba(0, 0, 0, .12);
             align-items: center;
             justify-content: space-between;
-            border: 1px solid grey;
-            margin-bottom: 2px;
+            margin-bottom: 5px;
             gap: 15px;
             max-width: 520px;
         }
@@ -51,23 +54,7 @@
             text-align: left;
         }
 
-        .artist__listeners {
-
-        }
-
-        .pagination {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .pagination__item {
-            color: black;
-            padding: 8px 16px;
-            text-decoration: none;
-        }
-
-        .pagination__item--active {
+        .error {
             color: red;
         }
     </style>
@@ -75,21 +62,34 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
+    // Helpers
+
     let isSingle = (artistsString) => {
-        return artistsString.split(/[,&]/).length === 1;
+        return artistsString.split(/[,&+]/).length === 1;
     };
 
     let getArtistsFromString = (artistsString) => {
-        return artistsString.split(/[,&]/).map(i => i.trim());
+        return artistsString.split(/[,&+]/).map(i => i.trim());
     };
 
     let generateIdFromArtistName = (name) => {
         return name.toLowerCase().replace(/\ /g, '_');
     };
 
-    let songsToPerformers = (songs) => {
-        let performers = [];
+    const useAsyncError = () => {
+        const [_, setError] = React.useState();
+        return React.useCallback(e => {
+                setError(() => {
+                    throw e;
+                });
+            },
+            [setError],
+        );
+    };
 
+    // Transformation functions
+
+    let songsToPerformers = (songs) => {
         return songs.reduce((acc, cur) => {
             if (isSingle(cur.artist)) {
                 if (!acc.filter(item => item.name === cur.artist).length > 0) {
@@ -123,6 +123,32 @@
         }, []);
     };
 
+    // Components
+    const Loader = () => <span>Loading...</span>;
+
+    const ErrorIndicator = () => {
+        return <h4 className="error">An error has been occurred, please try later.</h4>;
+    };
+
+    class ErrorBoundry extends React.Component {
+        constructor(props) {
+            super(props);
+            this.state = {hasError: false};
+        }
+
+        componentDidCatch() {
+            this.setState({hasError: true})
+        }
+
+        render() {
+            if (this.state.hasError) {
+                return <ErrorIndicator/>
+            } else {
+                return this.props.children
+            }
+        }
+    }
+
     const ArtistItem = ({artist}) => {
         return (
             <div className="artist">
@@ -130,87 +156,76 @@
                     {artist.name}
                 </div>
                 <div className="artist__listeners">
-                    artist listeners: {new Intl.NumberFormat().format(artist.listeners)}
+                    listeners: {new Intl.NumberFormat().format(artist.listeners)}
                 </div>
             </div>
         )
     };
 
-    const ArtistList = ({artists}) => {
-        return (
-            <div className="artist-list">
-                {artists.map(artist => <ArtistItem key={artist.id} artist={artist}/>)}
-            </div>
-        )
-    };
-
-    const App = () => {
+    const ArtistList = () => {
         const [songs, setSongs] = React.useState([]);
+        const [loading, setLoading] = React.useState(true);
         const [songsFetched, setSongsFetched] = React.useState(false);
-        const [activePage, setActivePage] = React.useState(1);
+        const throwError = useAsyncError();
 
-        const getPerformers = React.useMemo(() => {
-            return songsToPerformers(songs).sort((a, b) => b.listeners - a.listeners);
+        const performers = React.useMemo(() => {
+            return songsToPerformers(songs).sort((a, b) => b.listeners - a.listeners).slice(0, 10);
         });
 
         const apiService = {
+            apiServiceURL: "https://songs-api.herokuapp.com",
+
             getSongs(page) {
-                fetch(`https://songs-api.herokuapp.com/songs?_page=${page}`)
+                let endpoint = page ? `${this.apiServiceURL}/songs?_page=${page}` : `${this.apiServiceURL}/songs`;
+
+                fetch(endpoint)
                     .then(response => {
                         return response.json();
                     })
                     .then(data => {
                         setSongs(data);
                         setSongsFetched(true);
-                    });
+                        setLoading(false);
+                    }).catch(e => {
+                    setLoading(false);
+                    throwError(new Error("Asynchronous error"));
+                });
             }
-        };
-
-        const switchPage = (page) => {
-            setActivePage(page);
-            apiService.getSongs(page);
-        };
-
-        const Pagination = ({count, active}) => {
-            let paginationItems = [];
-
-            for (let i = 1; i <= count; i++) {
-                paginationItems.push(
-                    <a className={ i === active ? 'pagination__item pagination__item--active': 'pagination__item' }
-                        onClick={(e) => {
-                        e.preventDefault();
-                        switchPage(i)
-                    }} href="#">{i}</a>
-                )
-            }
-
-            return (
-                <div className="pagination">
-                    {paginationItems}
-                </div>)
         };
 
         React.useEffect(() => {
-            apiService.getSongs(activePage);
+            apiService.getSongs();
         }, []);
 
-
         return (
-            songsFetched && (
-                <div className="app-container">
-                    <ArtistList artists={getPerformers}/>
-                    <Pagination count={10} active={activePage} />
-                </div>
-            )
+            <React.Fragment>
+                {loading && <Loader/>}
+                {songsFetched && (
+                    <div className="artist-list">
+                        <h1>Top Artists</h1>
+                        {performers.map(artist => <ArtistItem key={artist.id} artist={artist}/>)}
+                    </div>
+                )}
+            </React.Fragment>
         )
     };
 
+    // App
+
+    const App = () => {
+        return (
+            <ErrorBoundry>
+                <div className="app-container">
+                    <ArtistList/>
+                </div>
+            </ErrorBoundry>
+        )
+    };
 
     ReactDOM.render(
         <App/>,
         document.getElementById('root')
     );
-
 </script>
 </body>
 </html>
