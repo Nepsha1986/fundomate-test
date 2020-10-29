@@ -13,6 +13,12 @@
             counter-reset: section;
         }
 
+        ul[class] {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
         .app-container {
             display: flex;
             flex-flow: column;
@@ -201,10 +207,16 @@
             <React.Fragment>
                 {loading && <Loader/>}
                 {songsFetched && (
-                    <div className="artist-list">
+                    <React.Fragment>
                         <h1>Top Artists</h1>
-                        {performers.map(artist => <ArtistItem key={artist.id} artist={artist}/>)}
-                    </div>
+                        <ul className="artist-list">
+                            {performers.map(artist => (
+                                <li key={artist.id} className="artist-list__item">
+                                    <ArtistItem artist={artist}/>
+                                </li>
+                            ))}
+                        </ul>
+                    </React.Fragment>
                 )}
             </React.Fragment>
         )
